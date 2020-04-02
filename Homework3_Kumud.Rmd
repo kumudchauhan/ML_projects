@@ -1,0 +1,112 @@
+---
+title: "Assignment 3 -  Gradient Boosting from scratch"
+author: "Kumud Chauhan"
+date: "6/13/2019"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+In this assignment, we explore how the gradient boosting algorithm works by approximating a complex function. We iteratively fit regression trees to fit our training data. We start with a single regression tree fitted on training data, then we compute the residuals of trained model. We then fit the next regression tree on the residuals. By doing so, we guide our model to correct's it's own errors. We iteratively perform these steps until our model converges to the true function or reaches the required error rate.
+
+In this assignement, we approximate the following function:
+\begin{equation}
+f(x) =sin(x) + 5cos(2x)-3sin(3x)+(1-e^{-x/3})+25
+\end{equation}
+
+```{r message=FALSE}
+#Load required libraries
+library(rpart)
+
+# Function to approximate
+func_x <- function(x) {
+  y <- sin(x)+5*cos(2*x)-3*sin(3*x)+(1-exp(-x/3))+25
+  return(y)
+}
+```
+ 
+The function $f(x)$ takes the value of x and return the true values of y. As our goal is to approximate this function, we use this function to generate training data. We generate data in the increrment of 0.01 between the given interval of $-10$ to 10. 
+
+## Gradient Boosting Tree Implementation
+```{r}
+# generate data for given func_x
+x <- seq(-10,10, by = 0.01)
+y <- func_x(x)
+
+# function to compute accuracy as defined in problem statement 
+compute_error <- function(true_y, pred_y){
+  return (sum(abs(true_y - pred_y)))
+}
+```
+
+
+```{r} 
+# function of gradient boosting tree algorithm
+BoostingTree <- function(x, y, lr,  max_iter=200, min_error=10, log_at=10){
+  data <- as.data.frame(cbind(x,y))
+
+  # Initialization : Fit a tree on X and Y  
+  first_tree <- rpart(y~x, data, method = "anova")
+  data$predict_y <- predict(first_tree, data=data$x)
+  data$fm_x  <- data$predict_y
+  error <- compute_error(data$y, data$fm_x )
+ 
+# Gradient Boosting: Learn from errors aka iteratively fit model on residuals
+  step = 1
+  while(error >= min_error && step <= max_iter){
+    data$residual <- data$y - data$fm_x 
+    tree_m <- rpart(residual~x, data, control = rpart.control(cp = 0.000001))
+    data$predict_y <- predict(tree_m, data=data$x)
+    data$fm_x <- data$fm_x+ lr*data$predict_y
+    error <- compute_error(data$y, data$fm_x)
+    if(step %% log_at ==0){
+      print(paste("Step ", step, "Error : ", error))
+    }
+    step = step+1
+  }
+  print(paste("Last Step ", step, "Error : ", error))
+  return (data$fm_x)
+}
+```
+
+## Function appoximation (Run till convergence)
+
+We run the algorithm till convergence, which is measured as:
+
+\begin{equation}
+ accuracy = \sum_{i}{|f(x_i)-model(x_i)|}\le10
+\end{equation}
+
+We run algorithm on 1.0 learning rate with 500 iterations and plotted the output. The red line in the plot is the original function and the green line is the approximation of the function (approximated by the algorithm). We see that the `green` line superimposed over the `red` line which indicates that our model fits so well on the `original function` that it is hard to differentiate between two lines which one is original and which is approximated function .
+
+```{r message=FALSE, warning=FALSE}
+pred_y <- BoostingTree(x, y, 1.0, 500)
+
+plot(x, y, type = 'line',col = "red", xlab = "x", ylab = "y", lty = 1, lwd = 2)
+lines(x, pred_y, col = "green", type = "l", lty = 1, lwd = 1)
+```
+
+## Impact of learning rate
+
+To better understand how learning rate impacts the model convergence, we choose two learning rates $1$ , $0.5$ and $0.1$ and run $5$ model iterations. As shown in the below figures, model with higher learning rate converges faster than lower learning rates. The plot shows that the `green` with learning rate $1.0$  and `yellow` line with learning rate $0.5$  fits well on original function while `blue` line with learning rate $0.1$.
+
+```{r message=FALSE, warning=FALSE}
+pred_y_lr_1.0 <- BoostingTree(x, y, 1.0, 5)
+pred_y_lr_0.1 <- BoostingTree(x, y, 0.1, 5)
+pred_y_lr_0.5 <- BoostingTree(x, y, 0.5, 5)
+
+plot(x, y, type = 'line',col = "red", xlab = "x", ylab = "y", lty = 1, lwd = 2)
+lines(x, pred_y_lr_1.0, col = "green", type = "l", lty = 1)
+lines(x, pred_y_lr_0.1, col = "blue", type = "l", lty = 1)
+lines(x, pred_y_lr_0.5, col = "yellow", type = "l", lty = 1)
+```
+
+#Conclusion 
+
+In this assignment, we implemented gradient tree boosting algorithm to approximate given function. We explored how simple tree algorithm combined with gradient boosting can appromiate complex functions. We also observed how different parameters such as number of iterations, control parameter, and learning rates affect the model convergence. In particular, we found that learning rate plays an important role on how fast the model converges. While in practice, we use libraries such as XGBoost for gradient boosting, implementing this model from scratch helped me in improving my understanding of gradient boosting. 
